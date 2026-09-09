@@ -1,0 +1,63 @@
+# ============================================================
+# fly_player 一键构建 workflow（备用模板）
+# 用途：本仓库 fork/push 后自动构建带补丁的 release APK
+# 特色：自动补齐 armeabi-v7a mpv 库（官方 2026-03-22 版，
+#       与 App 内置 arm64 v0.41.0-264 同源最接近，老设备实测稳定）
+# 用法：
+#   1. fork 仓库并 push 此文件到 .github/workflows/build_release.yml
+#   2. GitHub → Actions → 手动运行 "Build release APK"
+#   3. 产物在页面 Artifacts 下载 app-release.apk
+# ============================================================
+name: Build release APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [master, main]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter (stable)
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      # Java 17 + Android SDK 由 android-actions/setup-android 提供
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Fetch dependencies
+        run: |
+          flutter --version
+          flutter pub get
+
+      # 补齐 v7a 原生库：仓库 jniLibs 仅含 arm64-v8a，老 32 位设备无法运行
+      # 采用官方 2026-03-22 release（mpv v0.41.0-360，与 arm64 内置 -264 同源最接近，
+      # 局域网播放稳定；更新的 2026-08-11 -922 在该类老设备上有网络播放崩溃史）
+      - name: Add armeabi-v7a mpv libs (2026-03-22 official)
+        run: |
+          mkdir -p android/app/src/main/jniLibs/armeabi-v7a
+          cd /tmp
+          curl -sLO https://github.com/mpv-android/mpv-android/releases/download/2026-03-22/app-default-armeabi-v7a-release.apk
+          unzip -o -j app-default-armeabi-v7a-release.apk 'lib/armeabi-v7a/*.so' -d $GITHUB_WORKSPACE/android/app/src/main/jniLibs/armeabi-v7a/
+          ls -la $GITHUB_WORKSPACE/android/app/src/main/jniLibs/armeabi-v7a/ | head -12
+
+      - name: Build release APK
+        run: flutter build apk --release
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release
+          path: build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error

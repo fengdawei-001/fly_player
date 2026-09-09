@@ -6940,10 +6940,19 @@ class NativePlayerActivity : Activity(), NativeMediaCommandCoordinator.Handler {
             return
         }
         val pos = state.positionMs
-        // 有章节推断到的片头/片尾区间则精确跳转（跳到章节边界）；否则退回按设置时长上限的窗口。
-        val introEndMs = if (inferredIntroEndMs > 0) inferredIntroEndMs else introMaxMin * 60_000L
+        // 官方秒级配置（Flutter 侧 play_config.skip_opening/skip_ending 经 loadArgs 下发）：
+        // 优先用作精确跳转边界，其次才用章节推断 / 设置时长上限的粗窗口。
+        val officialIntroSec = (loadArgsMap["introDurationSeconds"] as? Number)?.toLong() ?: 0L
+        val officialOutroSec = (loadArgsMap["outroDurationSeconds"] as? Number)?.toLong() ?: 0L
+        val introEndMs =
+            if (inferredIntroEndMs > 0) inferredIntroEndMs
+            else if (officialIntroSec > 0L) officialIntroSec * 1000L
+            else introMaxMin * 60_000L
         val introShowFromMs = if (inferredIntroStartMs >= 0) maxOf(2_000L, inferredIntroStartMs) else 2_000L
-        val outroStartMs = if (inferredOutroStartMs >= 0) inferredOutroStartMs else dur - outroMaxMin * 60_000L
+        val outroStartMs =
+            if (inferredOutroStartMs >= 0) inferredOutroStartMs
+            else if (officialOutroSec > 0L) dur - officialOutroSec * 1000L
+            else dur - outroMaxMin * 60_000L
         when {
             // 片头窗口：起播 2s（或片头章节起点）后到片头结束边界内
             !introSkipDismissed && pos in introShowFromMs until introEndMs -> {
