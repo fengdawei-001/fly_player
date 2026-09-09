@@ -28,6 +28,12 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
+      # 仓库未提交 gradlew wrapper 脚本（仅 gradle-wrapper.properties），需自行提供 gradle
+      - name: Setup Gradle 8.14
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: 8.14.0
+
       - name: Fetch dependencies & prepare gradle props
         run: |
           flutter --version
@@ -45,12 +51,12 @@ jobs:
           unzip -o -j app-default-armeabi-v7a-release.apk 'lib/armeabi-v7a/*.so' -d $GITHUB_WORKSPACE/android/app/src/main/jniLibs/armeabi-v7a/
           ls -la $GITHUB_WORKSPACE/android/app/src/main/jniLibs/armeabi-v7a/ | head -12
 
-      # 直接走 Gradle（绕过 flutter build 工具层在 CI 的偶发 watcher 崩溃），
-      # 输出路径固定：android/app/build/outputs/apk/release/app-release.apk
+      # 直接走 Gradle（仓库缺 gradlew 脚本，由 setup-gradle 提供 gradle 二进制），
+      # 绕过 flutter build 工具层在 CI 的偶发 watcher 崩溃
       - name: Build release APK (gradle)
         run: |
           cd android
-          ./gradlew :app:assembleRelease --no-daemon
+          gradle :app:assembleRelease --no-daemon
           echo "--- apk result ---"
           find . -name '*.apk' -exec ls -la {} \;
 
