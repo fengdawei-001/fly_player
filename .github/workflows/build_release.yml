@@ -53,11 +53,12 @@ jobs:
 
       # 直接走 Gradle（仓库缺 gradlew 脚本，由 setup-gradle 提供 gradle 二进制），
       # 绕过 flutter build 工具层在 CI 的偶发 watcher 崩溃；
-      # 指名构建 profile flavor（设备在用的 -profile 版，避免多 flavor 聚合产物歧义）
+      # 指名构建 full×profile variant（对应 com.geqian.flyplayer.fly_player.profile，
+      # 即设备在用的版本：flavor=full, buildType=profile）
       - name: Build release APK (gradle)
         run: |
           cd android
-          gradle :app:assembleProfileRelease --no-daemon
+          gradle :app:assembleFullProfile --no-daemon
           echo "--- apk result ---"
           find . -path '*/build/outputs/*' -name '*.apk' -exec ls -la {} \;
 
