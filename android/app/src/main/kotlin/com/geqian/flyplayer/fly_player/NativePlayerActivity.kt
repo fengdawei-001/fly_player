@@ -1272,6 +1272,9 @@ class NativePlayerActivity : Activity(), NativeMediaCommandCoordinator.Handler {
     private var introOutroEnabled = true
     private var introMaxMin = 3
     private var outroMaxMin = 4
+    /** 手动自定义片头/片尾秒数；>0 时优先于官方配置与滑条档；-1 = 未自定义。 */
+    private var introCustomSec = -1L
+    private var outroCustomSec = -1L
     private var skipCountdownSec = 5
     private var introSkipDismissed = false
     private var outroSkipDismissed = false
@@ -6945,12 +6948,14 @@ class NativePlayerActivity : Activity(), NativeMediaCommandCoordinator.Handler {
         val officialIntroSec = (loadArgsMap["introDurationSeconds"] as? Number)?.toLong() ?: 0L
         val officialOutroSec = (loadArgsMap["outroDurationSeconds"] as? Number)?.toLong() ?: 0L
         val introEndMs =
-            if (inferredIntroEndMs > 0) inferredIntroEndMs
+            if (introCustomSec > 0L) introCustomSec * 1000L
+            else if (inferredIntroEndMs > 0) inferredIntroEndMs
             else if (officialIntroSec > 0L) officialIntroSec * 1000L
             else introMaxMin * 60_000L
         val introShowFromMs = if (inferredIntroStartMs >= 0) maxOf(2_000L, inferredIntroStartMs) else 2_000L
         val outroStartMs =
-            if (inferredOutroStartMs >= 0) inferredOutroStartMs
+            if (outroCustomSec > 0L) dur - outroCustomSec * 1000L
+            else if (inferredOutroStartMs >= 0) inferredOutroStartMs
             else if (officialOutroSec > 0L) dur - officialOutroSec * 1000L
             else dur - outroMaxMin * 60_000L
         when {
@@ -9111,12 +9116,20 @@ class NativePlayerActivity : Activity(), NativeMediaCommandCoordinator.Handler {
             introOutroEnabled = v; renderTopPanel()
         })
         if (introOutroEnabled) {
-            addPanelRow(panelSlider(localizedString(R.string.player_text_0276), 1f, 4f, introMaxMin.toFloat(), steps = 3, format = { localizedString(R.string.player_minutes_format, it.toInt()) }) { v ->
-                introMaxMin = v.toInt()
+            addPanelRow(panelSlider(localizedString(R.string.player_text_0276), 1f, 10f, introMaxMin.toFloat(), steps = 9, format = { localizedString(R.string.player_minutes_format, it.toInt()) }) { v ->
+                introMaxMin = v.toInt(); introCustomSec = -1L
             })
-            addPanelRow(panelSlider(localizedString(R.string.player_text_0277), 1f, 4f, outroMaxMin.toFloat(), steps = 3, format = { localizedString(R.string.player_minutes_format, it.toInt()) }) { v ->
-                outroMaxMin = v.toInt()
+            addPanelRow(panelNavRow(
+                localizedString(R.string.player_text_0284),
+                introCustomSummary(),
+            ) { showIntroOutroCustomDialog(true) })
+            addPanelRow(panelSlider(localizedString(R.string.player_text_0277), 1f, 10f, outroMaxMin.toFloat(), steps = 9, format = { localizedString(R.string.player_minutes_format, it.toInt()) }) { v ->
+                outroMaxMin = v.toInt(); outroCustomSec = -1L
             })
+            addPanelRow(panelNavRow(
+                localizedString(R.string.player_text_0285),
+                outroCustomSummary(),
+            ) { showIntroOutroCustomDialog(false) })
             addPanelRow(panelSlider(localizedString(R.string.player_text_0278), 2f, 10f, skipCountdownSec.toFloat(), steps = 8, format = { localizedString(R.string.player_seconds_format, it.toInt()) }) { v ->
                 skipCountdownSec = v.toInt()
             })
@@ -9124,11 +9137,57 @@ class NativePlayerActivity : Activity(), NativeMediaCommandCoordinator.Handler {
         addPanelRow(panelSectionHeader(localizedString(R.string.player_current_video)))
         // TODO(数据接入)：片头片尾时间点暂无（待 loadArgs 带 intro/outro 或反向通道检测）。
         addPanelRow(TextView(this).apply {
-            text = localizedString(R.string.player_no_intro_outro_detected)
+            text = if (introCustomSec > 0L || outroCustomSec > 0L)
+                localizedString(R.string.player_text_0290)
+            else localizedString(R.string.player_no_intro_outro_detected)
             setTextColor(TEXT_DIM)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
             setPadding(dp(12), dp(10), dp(12), dp(10))
         })
+    }
+
+    /** 手动片头/片尾秒数的行摘要：未自定义时显示跟随的滑条档。 */
+    private fun introCustomSummary(): String =
+        customDurationSummary(introCustomSec, introMaxMin)
+
+    private fun outroCustomSummary(): String =
+        customDurationSummary(outroCustomSec, outroMaxMin)
+
+    private fun customDurationSummary(customSec: Long, sliderMin: Int): String =
+        if (customSec > 0L) localizedString(R.string.player_custom_sec_format, customSec)
+        else localizedString(R.string.player_custom_slider_format, sliderMin)
+
+    /** 弹窗输入手动片头/片尾秒数（>0 生效并优先于官方配置与滑条；清除后回到滑条档）。 */
+    private fun showIntroOutroCustomDialog(isIntro: Boolean) {
+        cancelControlsAutoHide()
+        val current = if (isIntro) introCustomSec else outroCustomSec
+        val input = android.widget.EditText(this).apply {
+            inputType = android.text.InputType.TYPE_CLASS_NUMBER
+            setText(if (current > 0L) current.toString() else "")
+            hint = localizedString(R.string.player_text_0286)
+            setTextColor(Color.WHITE)
+            setHintTextColor(TEXT_DIM)
+            setSingleLine(true)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+        }
+        AlertDialog.Builder(this)
+            .setTitle(localizedString(if (isIntro) R.string.player_text_0284 else R.string.player_text_0285))
+            .setView(input)
+            .setPositiveButton(localizedString(R.string.player_text_0287)) { _, _ ->
+                val sec = input.text.toString().trim().toLongOrNull() ?: -1L
+                if (isIntro) introCustomSec = sec else outroCustomSec = sec
+                renderTopPanel()
+            }
+            .setNeutralButton(localizedString(R.string.player_text_0288)) { _, _ ->
+                if (isIntro) introCustomSec = -1L else outroCustomSec = -1L
+                renderTopPanel()
+            }
+            .setNegativeButton(localizedString(R.string.player_text_0289), null)
+            .setOnDismissListener {
+                enableImmersiveMode()
+                scheduleControlsAutoHide()
+            }
+            .show()
     }
 
     /** 书签按 itemGuid::mediaGuid 分组持久化（对齐 Flutter BookmarkStore 的 identityKey）。 */

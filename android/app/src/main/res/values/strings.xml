@@ -519,5 +519,14 @@
     <string name="player_text_0281">在当前位置添加书签</string>
     <string name="player_text_0282">暂无书签</string>
     <string name="player_text_0283">删除</string>
+    <string name="player_text_0284">片头手动秒数</string>
+    <string name="player_text_0285">片尾手动秒数</string>
+    <string name="player_text_0286">输入秒数（留空或 0 = 恢复滑条档）</string>
+    <string name="player_text_0287">应用</string>
+    <string name="player_text_0288">清除</string>
+    <string name="player_text_0289">取消</string>
+    <string name="player_text_0290">已启用手动秒级跳过：片头/片尾将精确跳转到所设秒数</string>
+    <string name="player_custom_sec_format">手动 %1$d 秒</string>
+    <string name="player_custom_slider_format">跟随滑条档（%1$d 分钟）</string>
 
 </resources>
